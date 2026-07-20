@@ -39,7 +39,7 @@ export default function DashboardLayout({ children }) {
   if (!username) return null;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen">
       <aside
         className={`bg-brand text-white flex flex-col shrink-0 transition-all ${
           collapsed ? "w-16" : "w-56"
