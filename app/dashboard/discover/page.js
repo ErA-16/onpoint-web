@@ -16,7 +16,6 @@ export default function DiscoverPage() {
     supabase
       .from("posts")
       .select("username, content, created_at, image_url")
-      .neq("username", username)
       .order("id", { ascending: false })
       .then(({ data, error }) => {
         if (!error) setPosts(data);

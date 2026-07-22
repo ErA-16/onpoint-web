@@ -9,18 +9,33 @@ import PostCard from "@/components/PostCard";
 export default function HomePage() {
   const { showToast, ToastHost } = useToast();
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [username, setUsername] = useState(null);
+  const [firstName, setFirstName] = useState("");
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [posts, setPosts] = useState([]);
   const [posting, setPosting] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState([]);
 
   useEffect(() => {
     const session = getSession();
     setUsername(session);
-    if (session) loadPosts(session);
+    if (session) {
+      loadPosts(session);
+      supabase
+        .from("users")
+        .select("full_name")
+        .eq("username", session)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data && data.full_name) {
+            setFirstName(data.full_name.split(" ")[0]);
+          }
+        });
+    }
   }, []);
 
   async function loadPosts(user) {
@@ -31,6 +46,39 @@ export default function HomePage() {
       .order("id", { ascending: false });
 
     if (!error) setPosts(data);
+  }
+
+  async function handleContentChange(e) {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setContent(value);
+
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+
+    if (match) {
+      const term = match[1].toLowerCase();
+      const { data } = await supabase
+        .from("users")
+        .select("username")
+        .ilike("username", `${term}%`)
+        .limit(5);
+      setMentionSuggestions(data || []);
+    } else {
+      setMentionSuggestions([]);
+    }
+  }
+
+  function selectMention(selectedUsername) {
+    const cursorPos = textareaRef.current.selectionStart;
+    const textBeforeCursor = content.slice(0, cursorPos);
+    const textAfterCursor = content.slice(cursorPos);
+
+    const replaced = textBeforeCursor.replace(/@(\w*)$/, `@${selectedUsername} `);
+
+    setContent(replaced + textAfterCursor);
+    setMentionSuggestions([]);
+    textareaRef.current.focus();
   }
 
   function handleFileChange(e) {
@@ -98,18 +146,37 @@ export default function HomePage() {
   return (
     <div className="max-w-2xl mx-auto px-8 py-8">
       <ToastHost />
-      <h1 className="text-2xl font-bold text-neutral-900">Welcome!</h1>
+      <h1 className="text-2xl font-bold text-neutral-900">
+        Welcome, {firstName}!
+      </h1>
       <p className="text-sm text-neutral-500 mb-4">
         What&apos;s on your mind today?
       </p>
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Write something..."
-        rows={3}
-        className="w-full rounded-xl2 border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-brand bg-neutral-50 focus:bg-white transition-colors"
-      />
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={handleContentChange}
+          placeholder="Write something..."
+          rows={3}
+          className="w-full rounded-xl2 border border-neutral-200 px-4 py-3 text-sm focus:outline-none focus:border-brand bg-neutral-50 focus:bg-white transition-colors"
+        />
+
+        {mentionSuggestions.length > 0 && (
+          <div className="absolute left-0 right-0 bg-white border border-neutral-200 rounded-xl2 shadow-lg z-10 overflow-hidden">
+            {mentionSuggestions.map((s) => (
+              <button
+                key={s.username}
+                onClick={() => selectMention(s.username)}
+                className="w-full text-left px-4 py-2 text-sm hover:bg-neutral-50"
+              >
+                @{s.username}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {imagePreview && (
         <div className="mt-2">

@@ -44,31 +44,33 @@ export default function MessagesInboxPage() {
     setAvatars(Object.fromEntries(avatarEntries));
   }
 
-  async function handleSearch(e) {
-    e.preventDefault();
-    const target = searchValue.trim().toLowerCase();
+  const [suggestions, setSuggestions] = useState([]);
 
-    if (target === username) {
-      showToast("You can't message yourself.");
+  useEffect(() => {
+    const term = searchValue.trim().toLowerCase();
+
+    if (term === "") {
+      setSuggestions([]);
       return;
     }
 
-    setSearching(true);
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from("users")
+        .select("username")
+        .ilike("username", `${term}%`)
+        .neq("username", username)
+        .limit(6);
 
-    const { data } = await supabase
-      .from("users")
-      .select("username")
-      .eq("username", target)
-      .maybeSingle();
+      setSuggestions(data || []);
+    }, 300);
 
-    setSearching(false);
+    return () => clearTimeout(timeout);
+  }, [searchValue, username]);
 
-    if (!data) {
-      showToast(`User '${target}' not found.`);
-      return;
-    }
-
+  function selectUser(target) {
     setSearchValue("");
+    setSuggestions([]);
     router.push(`/dashboard/messages/${target}`);
   }
 
@@ -79,22 +81,29 @@ export default function MessagesInboxPage() {
       <ToastHost />
       <h1 className="text-2xl font-bold text-neutral-900 mb-4">Messages</h1>
 
-      <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+      <div className="relative mb-6">
         <input
           type="text"
           placeholder="Search username..."
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
-          className="flex-1 h-11 rounded-xl2 border border-neutral-200 px-4 text-sm focus:outline-none focus:border-brand"
+          className="w-full h-11 rounded-xl2 border border-neutral-200 px-4 text-sm focus:outline-none focus:border-brand"
         />
-        <button
-          type="submit"
-          disabled={searching}
-          className="h-11 px-5 rounded-xl2 bg-brand hover:bg-brand-hover text-white text-sm font-bold disabled:opacity-60"
-        >
-          {searching ? "..." : "Search"}
-        </button>
-      </form>
+
+        {suggestions.length > 0 && (
+          <div className="absolute top-12 left-0 right-0 bg-white border border-neutral-200 rounded-xl2 shadow-lg z-10 overflow-hidden">
+            {suggestions.map((s) => (
+              <button
+                key={s.username}
+                onClick={() => selectUser(s.username)}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-neutral-50"
+              >
+                @{s.username}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2">
         {conversations.length === 0 && (
